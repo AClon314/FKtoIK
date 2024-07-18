@@ -7,7 +7,7 @@ bl_info = {
 import bpy
 
 def duplicate_bones(armature_name, bone_names):
-    """Duplicate specified bones in the armature."""
+    # Duplicate specified bones in the armature
     bpy.ops.object.mode_set(mode='OBJECT')
     armature = bpy.data.objects.get(armature_name)
     if not armature:
@@ -33,7 +33,7 @@ def duplicate_bones(armature_name, bone_names):
     return dup_bone_names
 
 def add_constraints(armature_name, bone_names, target_names):
-    """Add constraints to the duplicated bones."""
+    # Add constraints to the duplicated bones
     bpy.ops.object.mode_set(mode='OBJECT')
     armature = bpy.data.objects.get(armature_name)
     if not armature:
@@ -59,7 +59,7 @@ def add_constraints(armature_name, bone_names, target_names):
     bpy.ops.object.mode_set(mode='OBJECT')
 
 def bake_animation_to_keyframes(armature_name, bone_names, frame_start, frame_end):
-    """Bake animation to keyframes for the specified bones."""
+    # Bake animation to keyframes for the specified bones
     print("[FKTOIK] initiate baking")
     bpy.ops.object.mode_set(mode='OBJECT')
     armature = bpy.data.objects.get(armature_name)
@@ -85,7 +85,7 @@ def bake_animation_to_keyframes(armature_name, bone_names, frame_start, frame_en
     print("[FKTOIK] successfully bake")
 
 def clear_bone_parents(armature_name, bone_names):
-    """Clear parents of the specified bones."""
+    # Clear parents of the specified bones
     bpy.ops.object.mode_set(mode='OBJECT')
     armature = bpy.data.objects.get(armature_name)
     if not armature:
@@ -108,7 +108,7 @@ def clear_bone_parents(armature_name, bone_names):
     bpy.ops.object.mode_set(mode='OBJECT')
 
 def cleanup(armature_name, duplicated_bone_names):
-    """Clean up duplicated bones."""
+    # Clean up duplicated bones
     bpy.ops.object.mode_set(mode='OBJECT')
     armature = bpy.data.objects.get(armature_name)
     if not armature:
@@ -137,7 +137,7 @@ def cleanup(armature_name, duplicated_bone_names):
     bpy.ops.object.mode_set(mode='OBJECT')
 
 class FKtoIKOperator(bpy.types.Operator):
-    """Convert FK Bones to IK"""
+    # Convert FK Bones to IK
     bl_idname = "object.convert_fk_to_ik"
     bl_label = "Convert FK to IK"
     bl_options = {'REGISTER', 'UNDO'}
@@ -173,7 +173,7 @@ class FKtoIKOperator(bpy.types.Operator):
         return {'FINISHED'}
 
 class FKtoIKPanel(bpy.types.Panel):
-    """Creates a Panel in the Object properties window"""
+    # Creates a Panel in the Object properties window
     bl_label = "FK to IK Conversion"
     bl_idname = "OBJECT_PT_fk_to_ik"
     bl_space_type = 'VIEW_3D'
@@ -201,11 +201,11 @@ class FKtoIKPanel(bpy.types.Panel):
         layout.operator("object.convert_fk_to_ik")
 
 class BoneListItem(bpy.types.PropertyGroup):
-    """Group of properties representing an item in the list."""
+    # Group of properties representing an item in the list
     bone: bpy.props.StringProperty(name="Bone")
 
 class BONE_UL_items(bpy.types.UIList):
-    """Custom UIList for displaying bones."""
+    # Custom UIList for displaying bones
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         scene = context.scene
         armature = scene.my_armature
@@ -217,7 +217,7 @@ class BONE_UL_items(bpy.types.UIList):
             pass
 
 class OBJECT_OT_BoneListAdd(bpy.types.Operator):
-    """Add a new bone to the list"""
+    # Add a new bone to the list
     bl_idname = "object.bone_list_add"
     bl_label = "Add Bone"
 
@@ -226,7 +226,7 @@ class OBJECT_OT_BoneListAdd(bpy.types.Operator):
         return {'FINISHED'}
 
 class OBJECT_OT_BoneListRemove(bpy.types.Operator):
-    """Remove the top bone from the list"""
+    # Remove the selected bone from the list
     bl_idname = "object.bone_list_remove"
     bl_label = "Remove Bone"
 
