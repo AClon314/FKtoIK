@@ -1,6 +1,6 @@
 bl_info = {
     "name": "FK to IK Bone Conversion",
-    "blender": (4, 0, 0),
+    "blender": (4, 2, 0),
     "category": "Animation",
 }
 
