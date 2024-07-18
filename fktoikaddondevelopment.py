@@ -7,101 +7,71 @@ bl_info = {
 import bpy
 
 def duplicate_bones(armature_name, bone_names):
-    # Ensure Blender is in Object Mode
+    """Duplicate specified bones in the armature."""
     bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Get the armature object
     armature = bpy.data.objects.get(armature_name)
     if not armature:
         print("[FKTOIK] Armature not found.")
         return
 
-    # Make sure the armature is the active object
     bpy.context.view_layer.objects.active = armature
     armature.select_set(True)
-
-    # Switch to Edit Mode
     bpy.ops.object.mode_set(mode='EDIT')
 
     dup_bone_names = []
-    # Iterate through specified bones and duplicate them
     for bone_name in bone_names:
         if bone_name in armature.data.edit_bones:
             original_bone = armature.data.edit_bones[bone_name]
-            # Create a new bone
             new_bone = armature.data.edit_bones.new(original_bone.name + ".001")
             dup_bone_names.append(new_bone.name)
-            # Copy properties
             new_bone.length = original_bone.length
             new_bone.matrix = original_bone.matrix.copy()
         else:
             print(f"[FKTOIK] Bone named '{bone_name}' not found.")
-
-    # Return to Object Mode
+    
     bpy.ops.object.mode_set(mode='OBJECT')
-
     return dup_bone_names
 
-
 def add_constraints(armature_name, bone_names, target_names):
-    # Ensure we're in Object Mode
+    """Add constraints to the duplicated bones."""
     bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Select the armature object
     armature = bpy.data.objects.get(armature_name)
     if not armature:
         print("[FKTOIK] Armature not found.")
         return
-    
-    # Set the armature as the active object
+
     bpy.context.view_layer.objects.active = armature
     armature.select_set(True)
-
-    # Switch to Pose Mode
     bpy.ops.object.mode_set(mode='POSE')
 
-    # Loop through all bones and their corresponding targets
     for bone_name, target_name in zip(bone_names, target_names):
         bone = armature.pose.bones.get(bone_name)
         if bone:
-            # Add a copy location constraint
             copy_loc = bone.constraints.new('COPY_LOCATION')
             copy_loc.target = armature
-            copy_loc.subtarget = target_name  # Target the original bone
-            
-            # Add a copy rotation constraint
+            copy_loc.subtarget = target_name
             copy_rot = bone.constraints.new('COPY_ROTATION')
             copy_rot.target = armature
-            copy_rot.subtarget = target_name  # Target the original bone
+            copy_rot.subtarget = target_name
         else:
             print(f"[FKTOIK] Bone named '{bone_name}' not found in the armature.")
 
-    # Return to Object Mode
     bpy.ops.object.mode_set(mode='OBJECT')
-
 
 def bake_animation_to_keyframes(armature_name, bone_names, frame_start, frame_end):
+    """Bake animation to keyframes for the specified bones."""
     print("[FKTOIK] initiate baking")
-    # Ensure Blender is in Object Mode
     bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Get the armature object
     armature = bpy.data.objects.get(armature_name)
     if not armature:
         print("[FKTOIK] Armature not found.")
         return
 
-    # Make sure the armature is the active object
     bpy.context.view_layer.objects.active = armature
     armature.select_set(True)
-
-    # Switch to Pose Mode
     bpy.ops.object.mode_set(mode='POSE')
-
-    # Deselect all bones
     bpy.ops.pose.select_all(action='DESELECT')
 
-    # Select the specific bones
     for bone_name in bone_names:
         bone = armature.pose.bones.get(bone_name)
         if bone:
@@ -110,34 +80,23 @@ def bake_animation_to_keyframes(armature_name, bone_names, frame_start, frame_en
             print(f"[FKTOIK] Bone named '{bone_name}' not found.")
 
     print("[FKTOIK] start bake command")
-    # Bake the animation
     bpy.ops.nla.bake(frame_start=frame_start, frame_end=frame_end, only_selected=True, visual_keying=True, clear_constraints=True, clear_parents=False, use_current_action=True, bake_types={'POSE'})
-    # Return to Object Mode
     bpy.ops.object.mode_set(mode='OBJECT')
     print("[FKTOIK] successfully bake")
 
-
 def clear_bone_parents(armature_name, bone_names):
-    # Ensure we're in Object Mode
+    """Clear parents of the specified bones."""
     bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Get the armature object
     armature = bpy.data.objects.get(armature_name)
     if not armature:
         print("[FKTOIK] Armature not found.")
         return
 
-    # Set the armature as the active object
     bpy.context.view_layer.objects.active = armature
     armature.select_set(True)
-
-    # Switch to Edit Mode
     bpy.ops.object.mode_set(mode='EDIT')
 
-    # Get the edit bones
     edit_bones = armature.data.edit_bones
-
-    # Iterate through the specified bones and clear their parents
     for bone_name in bone_names:
         bone = edit_bones.get(bone_name)
         if bone:
@@ -146,33 +105,27 @@ def clear_bone_parents(armature_name, bone_names):
         else:
             print(f"[FKTOIK] Bone named '{bone_name}' not found in the armature.")
 
-    # Return to Object Mode
     bpy.ops.object.mode_set(mode='OBJECT')
 
 def cleanup(armature_name, duplicated_bone_names):
-    # Ensure Blender is in Object Mode
+    """Clean up duplicated bones."""
     bpy.ops.object.mode_set(mode='OBJECT')
-    
-    # Get the armature object
     armature = bpy.data.objects.get(armature_name)
     if not armature:
         print("[FKTOIK] Armature not found.")
         return
-    
-    # Set the armature as the active object
+
     bpy.context.view_layer.objects.active = armature
     armature.select_set(True)
-    
-    # Remove animation data associated with the bones
+
     if armature.animation_data and armature.animation_data.action:
         fcurves = armature.animation_data.action.fcurves
         for fcurve in fcurves:
             for bone_name in duplicated_bone_names:
                 if fcurve.data_path.startswith("pose.bones[\"" + bone_name + "\"]"):
                     fcurves.remove(fcurve)
-                    break  # Break the inner loop to avoid modifying the list during iteration
-    
-    # Switch to Edit Mode to remove bones
+                    break
+
     bpy.ops.object.mode_set(mode='EDIT')
     for bone_name in duplicated_bone_names:
         bone = armature.data.edit_bones.get(bone_name)
@@ -181,50 +134,46 @@ def cleanup(armature_name, duplicated_bone_names):
         else:
             print(f"[FKTOIK] Bone named '{bone_name}' not found.")
     
-    # Return to Object Mode
     bpy.ops.object.mode_set(mode='OBJECT')
 
-
-
 class FKtoIKOperator(bpy.types.Operator):
-    "Convert FK Bones to IK"
+    """Convert FK Bones to IK"""
     bl_idname = "object.convert_fk_to_ik"
     bl_label = "Convert FK to IK"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
-        return context.scene.my_armature is not None and context.scene.bone_name_1 and context.scene.bone_name_2
+        return context.scene.my_armature is not None and context.scene.fktoik_bone_list and (context.scene.fktoik_use_full_timeline or (context.scene.fktoik_frame_start != context.scene.fktoik_frame_end))
 
     def execute(self, context):
-        
         VAR_armature_name = context.scene.my_armature.name
-        VAR_bone_names = [context.scene.bone_name_1, context.scene.bone_name_2]
+        VAR_bone_names = [item.bone for item in context.scene.fktoik_bone_list]
+        frame_start = context.scene.fktoik_frame_start if not context.scene.fktoik_use_full_timeline else context.scene.frame_start
+        frame_end = context.scene.fktoik_frame_end if not context.scene.fktoik_use_full_timeline else context.scene.frame_end
         VAR_dup_bone_names = duplicate_bones(VAR_armature_name, VAR_bone_names)
         print(f"[FKTOIK] BONES DUPLICATED: '{VAR_dup_bone_names}'")
 
         add_constraints(VAR_armature_name, VAR_dup_bone_names, VAR_bone_names)
         print("[FKTOIK] successfully added first constraints")
 
-        bake_animation_to_keyframes(VAR_armature_name, VAR_dup_bone_names, bpy.context.scene.frame_start, bpy.context.scene.frame_end)
+        bake_animation_to_keyframes(VAR_armature_name, VAR_dup_bone_names, frame_start, frame_end)
 
         clear_bone_parents(VAR_armature_name, VAR_bone_names)
-
         print("[FKTOIK] successfully cleared bone parents")
 
         add_constraints(VAR_armature_name, VAR_bone_names, VAR_dup_bone_names)
-
         print("[FKTOIK] successfully added second constraints")
 
-        bake_animation_to_keyframes(VAR_armature_name, VAR_bone_names, bpy.context.scene.frame_start, bpy.context.scene.frame_end)
+        bake_animation_to_keyframes(VAR_armature_name, VAR_bone_names, frame_start, frame_end)
 
         cleanup(VAR_armature_name, VAR_dup_bone_names)
-
         print("[FKTOIK] duplicate bones cleaned up")
         print("[FKTOIK] TRANSFER FROM FK TO IK COMPLETE")
         return {'FINISHED'}
 
 class FKtoIKPanel(bpy.types.Panel):
+    """Creates a Panel in the Object properties window"""
     bl_label = "FK to IK Conversion"
     bl_idname = "OBJECT_PT_fk_to_ik"
     bl_space_type = 'VIEW_3D'
@@ -234,28 +183,87 @@ class FKtoIKPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        
+
         layout.prop(scene, "my_armature", text="Armature")
 
         if scene.my_armature:
-            layout.prop_search(scene, "bone_name_1", scene.my_armature.data, "bones", text="Bone 1")
-            layout.prop_search(scene, "bone_name_2", scene.my_armature.data, "bones", text="Bone 2")
+            row = layout.row()
+            row.template_list("BONE_UL_items", "", scene, "fktoik_bone_list", scene, "fktoik_bone_list_index", rows=2)
+            col = row.column(align=True)
+            col.operator("object.bone_list_add", icon='ADD', text="")
+            col.operator("object.bone_list_remove", icon='REMOVE', text="")
+
+            layout.prop(scene, "fktoik_use_full_timeline", text="Use Full Timeline")
+            if not scene.fktoik_use_full_timeline:
+                layout.prop(scene, "fktoik_frame_start", text="Frame Start")
+                layout.prop(scene, "fktoik_frame_end", text="Frame End")
 
         layout.operator("object.convert_fk_to_ik")
+
+class BoneListItem(bpy.types.PropertyGroup):
+    """Group of properties representing an item in the list."""
+    bone: bpy.props.StringProperty(name="Bone")
+
+class BONE_UL_items(bpy.types.UIList):
+    """Custom UIList for displaying bones."""
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        scene = context.scene
+        armature = scene.my_armature
+
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            if armature:
+                layout.prop_search(item, "bone", armature.data, "bones", text="")
+        elif self.layout_type in {'GRID'}:
+            pass
+
+class OBJECT_OT_BoneListAdd(bpy.types.Operator):
+    """Add a new bone to the list"""
+    bl_idname = "object.bone_list_add"
+    bl_label = "Add Bone"
+
+    def execute(self, context):
+        context.scene.fktoik_bone_list.add()
+        return {'FINISHED'}
+
+class OBJECT_OT_BoneListRemove(bpy.types.Operator):
+    """Remove the top bone from the list"""
+    bl_idname = "object.bone_list_remove"
+    bl_label = "Remove Bone"
+
+    def execute(self, context):
+        bone_list = context.scene.fktoik_bone_list
+        index = context.scene.fktoik_bone_list_index
+        bone_list.remove(index)
+        context.scene.fktoik_bone_list_index = max(0, index - 1)
+        return {'FINISHED'}
 
 def register():
     bpy.utils.register_class(FKtoIKOperator)
     bpy.utils.register_class(FKtoIKPanel)
+    bpy.utils.register_class(BoneListItem)
+    bpy.utils.register_class(OBJECT_OT_BoneListAdd)
+    bpy.utils.register_class(OBJECT_OT_BoneListRemove)
+    bpy.utils.register_class(BONE_UL_items)  # Register the new UIList class
     bpy.types.Scene.my_armature = bpy.props.PointerProperty(type=bpy.types.Object, poll=lambda self, obj: obj.type == 'ARMATURE')
-    bpy.types.Scene.bone_name_1 = bpy.props.StringProperty()
-    bpy.types.Scene.bone_name_2 = bpy.props.StringProperty()
+    bpy.types.Scene.fktoik_bone_list = bpy.props.CollectionProperty(type=BoneListItem)
+    bpy.types.Scene.fktoik_bone_list_index = bpy.props.IntProperty()
+    bpy.types.Scene.fktoik_use_full_timeline = bpy.props.BoolProperty(name="Use Full Timeline", default=True)
+    bpy.types.Scene.fktoik_frame_start = bpy.props.IntProperty(name="Frame Start", default=1)
+    bpy.types.Scene.fktoik_frame_end = bpy.props.IntProperty(name="Frame End", default=250)
 
 def unregister():
     bpy.utils.unregister_class(FKtoIKOperator)
     bpy.utils.unregister_class(FKtoIKPanel)
+    bpy.utils.unregister_class(BoneListItem)
+    bpy.utils.unregister_class(OBJECT_OT_BoneListAdd)
+    bpy.utils.unregister_class(OBJECT_OT_BoneListRemove)
+    bpy.utils.unregister_class(BONE_UL_items)  # Unregister the new UIList class
     del bpy.types.Scene.my_armature
-    del bpy.types.Scene.bone_name_1
-    del bpy.types.Scene.bone_name_2
+    del bpy.types.Scene.fktoik_bone_list
+    del bpy.types.Scene.fktoik_bone_list_index
+    del bpy.types.Scene.fktoik_use_full_timeline
+    del bpy.types.Scene.fktoik_frame_start
+    del bpy.types.Scene.fktoik_frame_end
 
 if __name__ == "__main__":
     register()
