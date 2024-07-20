@@ -2,6 +2,8 @@ bl_info = {
     "name": "FK to IK Bone Conversion",
     "blender": (4, 2, 0),
     "category": "Animation",
+    "author": "Pinpoint24",
+    "version": (1, 0, 0),
 }
 
 import bpy
