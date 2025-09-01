@@ -3,7 +3,7 @@ bl_info = {
     "blender": (4, 2, 0),
     "category": "Animation",
     "author": "Pinpoint24, Nolca",
-    "version": (1, 0, 1),
+    "version": (1, 1, 0),
 }
 import os
 import bpy
@@ -16,9 +16,6 @@ SELF = os.path.basename(__file__)
 
 def Props(context: bpy.types.Context) -> "FKtoIK_PropsGroup":
     return context.scene.FKtoIK_props  # type: ignore
-
-
-# TODO: 暴露函数，刷新列表，加载自定义映射json
 
 
 def copy_args(func: Callable[_PS, _TV]):
@@ -292,14 +289,14 @@ class FKtoIKOperator(bpy.types.Operator):
     def poll(cls, context):
         props = Props(context)
         return (
-            props.my_armature is not None
+            props.src_armature is not None
             and props.bone_list
             and (props.frame_start != props.frame_end)
         )
 
     def execute(self, context):
         props = Props(context)
-        armature_name = props.my_armature.name
+        armature_name = props.src_armature.name
         bone_names = [item.bone for item in props.bone_list]
         fk_to_ik(armature_name, bone_names, mode="replace")
         return {"FINISHED"}
@@ -315,14 +312,14 @@ class FK_append_to_IK_Operator(bpy.types.Operator):
     def poll(cls, context):
         props = Props(context)
         return (
-            props.my_armature is not None
+            props.src_armature is not None
             and props.bone_list
             and (props.frame_start != props.frame_end)
         )
 
     def execute(self, context):
         props = Props(context)
-        armature_name = props.my_armature.name
+        armature_name = props.src_armature.name
         bone_names = [item.bone for item in props.bone_list]
         fk_to_ik(
             armature_name, bone_names, mode="append", no_scale=not props.is_copy_scale
@@ -340,12 +337,46 @@ class FKtoIKPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        assert layout
         props = Props(context)
 
-        layout.prop(props, "my_armature", text="", icon="ARMATURE_DATA")
+        col = layout.column(align=True)
+        row = col.row(align=True)
+        row.prop(props, "mapping_preset", icon="GROUP_BONE", text="")
+        row.operator("wm.open_dir_mapping", icon="FILE_FOLDER", text="")
 
-        if not props.my_armature:
+        if props.mapping_preset != "new":
             return
+        row = col.row(align=True)
+        _row = row.row(align=True)
+        _row.prop(
+            props,
+            "src_armature",
+            text="",
+            placeholder="Source",
+            icon="ARMATURE_DATA",
+        )
+        _row.enabled = not props.is_current_selected
+        row.prop(
+            props,
+            "is_current_selected",
+            text="",
+            icon=(
+                "RESTRICT_SELECT_OFF"
+                if props.is_current_selected
+                else "RESTRICT_SELECT_ON"
+            ),
+        )
+        row = col.column(align=True)
+        if not props.src_armature:
+            return
+        # row.prop(
+        #     props,
+        #     "dst_armature",
+        #     text="",
+        #     placeholder="Target",
+        #     icon="ARMATURE_DATA",
+        # )
 
         row = layout.row()
         row.template_list(
@@ -355,10 +386,14 @@ class FKtoIKPanel(bpy.types.Panel):
         col.operator("object.bone_list_get_current", icon="FILE_REFRESH", text="")
         col.operator("object.bone_list_add", icon="ADD", text="")
         col.operator("object.bone_list_remove", icon="REMOVE", text="")
+        col.operator("object.bone_list_export", icon="EXPORT", text="")
 
         layout.prop(props, "is_copy_scale", text="Copy Scale")
-        layout.operator("object.fk_to_ik", icon="BONE_DATA")
-        layout.operator("object.fk_append_to_ik", icon="GROUP_BONE")
+        col = layout.column(align=True)
+        col.operator("object.fk_to_ik", icon="BONE_DATA")
+        row = col.row(align=True)
+        row.operator("object.fk_append_to_ik", icon="GROUP_BONE")
+        row.prop(props, "bone_layer_fallback", icon="LAYER_ACTIVE", text="")
 
 
 class BoneListItem(bpy.types.PropertyGroup):
@@ -374,7 +409,7 @@ class BONE_UL_items(bpy.types.UIList):
         self, context, layout, data, item, icon, active_data, active_propname, index
     ):
         props = Props(context)
-        armature = props.my_armature
+        armature = props.src_armature
 
         if self.layout_type in {"DEFAULT", "COMPACT"}:
             if armature:
@@ -390,7 +425,7 @@ class OBJECT_OT_BoneListGetCurrent(bpy.types.Operator):
 
     def execute(self, context):
         props = Props(context)
-        armature: bpy.types.Object = props.my_armature
+        armature: bpy.types.Object = props.src_armature
         if not (armature and isinstance(armature.data, bpy.types.Armature)):
             return {"CANCELLED"}
         props.bone_list.clear()
@@ -438,13 +473,45 @@ class OBJECT_OT_BoneListRemove(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class OBJECT_OT_BoneListExport(bpy.types.Operator):
+    """Export the selected bones to a file"""
+
+    bl_idname = "object.bone_list_export"
+    bl_label = "Export Bone List"
+
+    def execute(self, context):
+        props = Props(context)
+        armature = props.src_armature
+        if not (armature and isinstance(armature.data, bpy.types.Armature)):
+            return {"CANCELLED"}
+
+        # Get the selected bones
+        selected_bones = [b for b in armature.data.bones if b.select]
+        if not selected_bones:
+            self.report({"WARNING"}, "No bones selected")
+            return {"CANCELLED"}
+
+        # Export the bone list to a file
+        file_path = bpy.path.abspath("//bone_list.txt")
+        with open(file_path, "w") as f:
+            for bone in selected_bones:
+                f.write(f"{bone.name}\n")
+
+        self.report({"INFO"}, f"Bone list exported to {file_path}")
+        return {"FINISHED"}
+
+
 class FKtoIK_PropsGroup(bpy.types.PropertyGroup):
-    my_armature: bpy.props.PointerProperty(type=bpy.types.Object, poll=lambda self, obj: obj.type == "ARMATURE")  # type: ignore
+    mapping_preset: bpy.props.EnumProperty(name="Mapping Preset", items=[("new", "new preset", "New preset")])  # type: ignore
+    src_armature: bpy.props.PointerProperty(type=bpy.types.Object, poll=lambda self, obj: obj.type == "ARMATURE")  # type: ignore
+    # dst_armature: bpy.props.PointerProperty(type=bpy.types.Object, poll=lambda self, obj: obj.type == "ARMATURE")  # type: ignore
+    is_current_selected: bpy.props.BoolProperty(name="Use Current Selected", default=True, description="Refresh bone list with current selected armature")  # type: ignore
     bone_list: bpy.props.CollectionProperty(type=BoneListItem)  # type: ignore
     bone_list_index: bpy.props.IntProperty()  # type: ignore
     frame_start: bpy.props.IntProperty(name="Frame Start", default=1)  # type: ignore
     frame_end: bpy.props.IntProperty(name="Frame End", default=250)  # type: ignore
     is_copy_scale: bpy.props.BoolProperty(name="Copy Scale", default=True, description="If true, the constraint would be `COPY_TRANSFORMS`, else `COPY_LOCATION`+`COPY_ROTATION`")  # type: ignore
+    bone_layer_fallback: bpy.props.StringProperty(name="Bone Layer Fallback", default="IK")  # type: ignore
 
 
 CLASS = [
@@ -455,6 +522,7 @@ CLASS = [
     OBJECT_OT_BoneListGetCurrent,
     OBJECT_OT_BoneListAdd,
     OBJECT_OT_BoneListRemove,
+    OBJECT_OT_BoneListExport,
     BONE_UL_items,
 ]
 CLASS_UI = [
