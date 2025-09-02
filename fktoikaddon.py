@@ -12,6 +12,7 @@ from typing import Callable, Literal, ParamSpec, TypeVar, cast
 _PS = ParamSpec("_PS")
 _TV = TypeVar("_TV")
 SELF = os.path.basename(__file__)
+OWNER = object()
 
 
 def Props(context: bpy.types.Context) -> "FKtoIK_PropsGroup":
@@ -530,13 +531,38 @@ CLASS_UI = [
 ]
 
 
+def when_selected_update():
+    """If this func not execute any once, re-enable this extension!"""
+    props = bpy.context.scene.FKtoIK_props  # type: ignore
+    active = bpy.context.active_object
+    if props.is_current_selected and active and active.type == "ARMATURE":
+        props.src_armature = active
+
+
+@bpy.app.handlers.persistent
+def register_msgbus(scene=None):
+    bpy.msgbus.clear_by_owner(OWNER)
+    bpy.msgbus.subscribe_rna(
+        key=(bpy.types.LayerObjects, "active"),  # type: ignore
+        owner=OWNER,
+        args=(),
+        notify=when_selected_update,
+    )
+
+
 def register():
     [bpy.utils.register_class(cls) for cls in CLASS]
     bpy.types.Scene.FKtoIK_props = bpy.props.PointerProperty(type=FKtoIK_PropsGroup)  # type: ignore
     [bpy.utils.register_class(cls) for cls in CLASS_UI]
+    bpy.app.handlers.load_post.append(register_msgbus)
 
 
 def unregister():
+    bpy.msgbus.clear_by_owner(OWNER)
+    try:
+        bpy.app.handlers.load_post.remove(register_msgbus)
+    except Exception as e:
+        Log.error("", exc_info=e)
     [bpy.utils.unregister_class(cls) for cls in reversed(CLASS_UI)]
     del bpy.types.Scene.FKtoIK_props  # type: ignore
     [bpy.utils.unregister_class(cls) for cls in reversed(CLASS)]
