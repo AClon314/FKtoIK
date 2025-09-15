@@ -381,7 +381,7 @@ class FKtoIKPanel(bpy.types.Panel):
 
         row = layout.row()
         row.template_list(
-            "BONE_UL_items", "", props, "bone_list", props, "bone_list_index", rows=2
+            "BONE_UL_items", "", props, "bone_list", props, "bone_list_index", rows=1
         )
         col = row.column(align=True)
         col.operator("object.bone_list_get_current", icon="FILE_REFRESH", text="")
@@ -394,35 +394,109 @@ class FKtoIKPanel(bpy.types.Panel):
         col.operator("object.fk_to_ik", icon="BONE_DATA")
         row = col.row(align=True)
         row.operator("object.fk_append_to_ik", icon="GROUP_BONE")
-        row.prop(props, "bone_layer_fallback", icon="LAYER_ACTIVE", text="")
+        row.prop(props, "bone_layer_fallback", icon="ADD", text="")
+
+        row = layout.row(align=True)
+        sx, sy = get_scale()
+        row.label(
+            text=f"region{bpy.context.region.width} area{bpy.context.area.width} scale{sx:.2f},{sy:.2f} base{bpy.context.preferences.system.ui_scale}"  # type: ignore
+        )
 
 
 class BoneListItem(bpy.types.PropertyGroup):
     """Group of properties representing an item in the list"""
 
-    bone: bpy.props.StringProperty(name="Bone")  # type: ignore
+    src_bone: bpy.props.StringProperty(name="Source FK Bone")  # type: ignore
+    dst_bone: bpy.props.StringProperty(name="Destination IK Bone")  # type: ignore
+
+    @staticmethod
+    def remove_empty(props):
+        """移除src_bone和dst_bone都为空的项"""
+        items_to_remove = []
+        for i, item in enumerate(props.bone_list):
+            if not item.src_bone and not item.dst_bone:
+                items_to_remove.append(i)
+
+        # 从后往前删除，避免索引变化影响删除操作
+        for i in reversed(items_to_remove):
+            if i < len(props.bone_list):
+                props.bone_list.remove(i)
 
 
 class BONE_UL_items(bpy.types.UIList):
     """Custom UIList for displaying bones"""
 
     def draw_item(
-        self, context, layout, data, item, icon, active_data, active_propname, index
+        self,
+        context,
+        layout: bpy.types.UILayout,
+        data,
+        item,
+        icon,
+        active_data,
+        active_propname,
+        index,
     ):
         props = Props(context)
-        armature = props.src_armature
-
+        if not props.src_armature or not isinstance(
+            props.src_armature.data, bpy.types.Armature
+        ):
+            return
+        src = props.src_armature
         if self.layout_type in {"DEFAULT", "COMPACT"}:
-            if armature:
-                layout.prop_search(item, "bone", armature.data, "bones", text="")
+            is_dstBone_in_srcArmature = item.dst_bone in src.data.bones
+            split = layout.split(
+                factor=(
+                    0.5
+                    if is_dstBone_in_srcArmature
+                    else min(
+                        0.95, max(0.05, 1 - ((bpy.context.region.width - 85) / 1700))
+                    )
+                ),
+                align=True,
+            )
+            split.prop_search(item, "src_bone", src.data, "bones", text="")
+            split.prop_search(
+                item,
+                "dst_bone",
+                src.data,
+                "bones",
+                text="",
+                icon="RIGHTARROW" if is_dstBone_in_srcArmature else "ADD",
+                results_are_suggestions=True,
+            )
+            # TODO: use dst.data when NOT dst_armature == src_armature
         elif self.layout_type in {"GRID"}:
-            pass
+            ...
+
+    def filter_items(self, context, data, propname):
+        bone_list = getattr(data, propname, [])
+        flt_flags = []
+        flt_neworder = []
+
+        # 如果有文本过滤器，则应用过滤
+        if self.filter_name:
+            flt_flags = bpy.types.UI_UL_list.filter_items_by_name(
+                self.filter_name,
+                self.bitflag_filter_item,
+                bone_list,
+                "src_bone",
+                reverse=False,
+            )
+
+        # 如果没有过滤器标志，则初始化为所有项都可见
+        if not flt_flags:
+            flt_flags = [self.bitflag_filter_item] * len(bone_list)
+
+        return flt_flags, flt_neworder
 
 
 class OBJECT_OT_BoneListGetCurrent(bpy.types.Operator):
+    "Get current selected bones, need to be in Edit or Pose mode ⚠️"
+
     bl_idname = "object.bone_list_get_current"
     bl_label = "Refresh"
-    bl_description = "Get current (selected) bones"
+    bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
         props = Props(context)
@@ -440,9 +514,8 @@ class OBJECT_OT_BoneListGetCurrent(bpy.types.Operator):
             bones = armature.data.bones
 
         for bone in bones:
-            if not any(item.bone == bone.name for item in props.bone_list):
-                item = props.bone_list.add()
-                item.bone = bone.name
+            item = props.bone_list.add()
+            item.src_bone = bone.name
         props.bone_list_index = 0
         return {"FINISHED"}
 
@@ -463,7 +536,8 @@ class OBJECT_OT_BoneListRemove(bpy.types.Operator):
     """Remove the selected bone from the list"""
 
     bl_idname = "object.bone_list_remove"
-    bl_label = "Remove Bone"
+    bl_label = "Remove"
+    bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
         props = Props(context)
@@ -475,10 +549,10 @@ class OBJECT_OT_BoneListRemove(bpy.types.Operator):
 
 
 class OBJECT_OT_BoneListExport(bpy.types.Operator):
-    """Export the selected bones to a file"""
+    """Export the selected bones to a preset"""
 
     bl_idname = "object.bone_list_export"
-    bl_label = "Export Bone List"
+    bl_label = "Export"
 
     def execute(self, context):
         props = Props(context)
